@@ -1,24 +1,30 @@
 package arun.wavanal;
 
-import android.support.v7.app.ActionBarActivity;
+
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Bundle;
+import android.os.Environment;
+import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
 
-import android.app.Activity;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
-import android.os.Bundle;
-import android.os.Environment;
-import android.view.View;
-import android.widget.Button;
+import be.tarsos.dsp.AudioDispatcher;
+import be.tarsos.dsp.AudioEvent;
+import be.tarsos.dsp.filters.BandPass;
+import be.tarsos.dsp.io.TarsosDSPAudioFloatConverter;
+import be.tarsos.dsp.io.TarsosDSPAudioFormat;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -32,6 +38,7 @@ public class MainActivity extends ActionBarActivity {
     private static final int RECORDER_AUDIO_ENCODING = AudioFormat.ENCODING_PCM_16BIT;
 
     private AudioRecord recorder = null;
+    private AudioDispatcher dispatcher = null;
     private int bufferSize = 0;
     private Thread recordingThread = null;
     private boolean isRecording = false;
@@ -48,6 +55,7 @@ public class MainActivity extends ActionBarActivity {
                 AudioFormat.CHANNEL_CONFIGURATION_MONO,
                 AudioFormat.ENCODING_PCM_16BIT);
 
+        System.out.println("Buffer Size is : "+bufferSize);
     }
 
     private void setButtonHandlers() {
@@ -72,7 +80,7 @@ public class MainActivity extends ActionBarActivity {
             file.mkdirs();
         }
 
-        return (file.getAbsolutePath() + "/" + System.currentTimeMillis() + AUDIO_RECORDER_FILE_EXT_WAV);
+        return (file.getAbsolutePath() + "/" + "audio" + AUDIO_RECORDER_FILE_EXT_WAV);
     }
 
     private String getTempFilename(){
@@ -92,8 +100,17 @@ public class MainActivity extends ActionBarActivity {
     }
 
     private void startRecording(){
+
+        //AudioProcessor bandPassFilter = new BandPass(1000f, 100f, RECORDER_SAMPLERATE);
+
         recorder = new AudioRecord(MediaRecorder.AudioSource.MIC,
                 RECORDER_SAMPLERATE, RECORDER_CHANNELS,RECORDER_AUDIO_ENCODING, bufferSize);
+
+        //dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(RECORDER_SAMPLERATE, bufferSize, 0);
+
+        //dispatcher.addAudioProcessor(bandPassFilter);
+
+        //dispatcher.
 
         int i = recorder.getState();
         if(i==1)
@@ -126,18 +143,54 @@ public class MainActivity extends ActionBarActivity {
 
         int read = 0;
 
+        //LowPassSP lowpassFilter = new LowPassSP(1000f, RECORDER_SAMPLERATE);
+
+        //AudioProcessor lowpassFilter = new LowPassSP(1000f, RECORDER_SAMPLERATE);
+
+        BandPass bandPassFilter = new BandPass(1000f, 15f, RECORDER_SAMPLERATE);
+
         if(null != os){
             while(isRecording){
                 read = recorder.read(data, 0, bufferSize);
 
+                TarsosDSPAudioFormat mTarsosFormat = new TarsosDSPAudioFormat(RECORDER_SAMPLERATE, 16, 1, true, false);
+                AudioEvent audioEvent = new AudioEvent(mTarsosFormat,read);
+
+                float floatRead[] = new float[bufferSize/4];
+
+                TarsosDSPAudioFloatConverter converter = TarsosDSPAudioFloatConverter.getConverter(mTarsosFormat);
+
+
+
+                floatRead = converter.toFloatArray(data,floatRead);
+
+                /*public static float bytearray2float(byte[] b) {
+                    ByteBuffer buf = ByteBuffer.wrap(b);
+                    return buf.getFloat();
+                }*/
+
+                audioEvent.setFloatBuffer(floatRead);
+                bandPassFilter.process(audioEvent);
+                byte[] filteredBuffer = audioEvent.getByteBuffer();
+
+                //System.out.println("Before : After" +data[1000] + "   "+filteredBuffer[1000]);
+                Log.d("DIFFFFFF Before After", Boolean.toString(Arrays.equals(data,filteredBuffer)));
+                Log.d("SAMEEEE Before After", Boolean.toString(Arrays.equals(data,data)));
+
+                Log.d("DIFFFFFF Before After", Byte.toString(data[111]));
+                Log.d("SAMEEEE Before After", Byte.toString(filteredBuffer[111]));
+
+
                 if(AudioRecord.ERROR_INVALID_OPERATION != read){
                     try {
-                        os.write(data);
+                        os.write(filteredBuffer);
+                        //os.write(data);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 }
             }
+
 
             try {
                 os.close();
@@ -306,4 +359,54 @@ public class MainActivity extends ActionBarActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
+    private void ReadWAVFile(String filePath) throws IOException{
+
+        if (filePath==null)
+            return;
+
+        int intSize = android.media.AudioTrack.getMinBufferSize(44100, AudioFormat.CHANNEL_CONFIGURATION_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT);
+
+        int count = 512 * 1024; // 512 kb
+        //Reading the file..
+        byte[] byteData = null;
+        File file = null;
+        file = new File(filePath);
+
+        byteData = new byte[(int)count];
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream( file );
+
+        } catch (FileNotFoundException e) {
+        // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        int bytesread = 0, ret = 0;
+        int size = (int) file.length();
+
+        while (bytesread < size){
+
+            ret = in.read( byteData,0, count);
+
+            if (ret != -1){
+
+                System.out.println(byteData[0]);
+
+                bytesread += ret;
+
+            }
+
+            else break;
+
+        }
+
+
+
+        in.close();
+
+    }
+
 }
