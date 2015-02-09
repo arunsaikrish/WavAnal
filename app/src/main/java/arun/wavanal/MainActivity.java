@@ -156,11 +156,9 @@ public class MainActivity extends ActionBarActivity {
                 TarsosDSPAudioFormat mTarsosFormat = new TarsosDSPAudioFormat(RECORDER_SAMPLERATE, 16, 1, true, false);
                 AudioEvent audioEvent = new AudioEvent(mTarsosFormat,read);
 
-                float floatRead[] = new float[bufferSize/4];
+                float[] floatRead = new float[bufferSize/4];
 
                 TarsosDSPAudioFloatConverter converter = TarsosDSPAudioFloatConverter.getConverter(mTarsosFormat);
-
-
 
                 floatRead = converter.toFloatArray(data,floatRead);
 
